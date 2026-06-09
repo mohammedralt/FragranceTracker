@@ -1,0 +1,32 @@
+{
+  "name": "fragrance-scraper",
+  "version": "1.0.0",
+  "description": "Price scraping service for fragrance retailers",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "scrape": "ts-node src/scrape.ts",
+    "worker": "ts-node src/queue/worker.ts",
+    "scheduler": "ts-node src/queue/scheduler.ts",
+    "install:browsers": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.44.0",
+    "bullmq": "^5.7.0",
+    "ioredis": "^5.4.1",
+    "pg": "^8.11.5",
+    "dotenv": "^16.4.5",
+    "cheerio": "^1.0.0-rc.12",
+    "axios": "^1.7.2",
+    "pino": "^9.1.0",
+    "pino-pretty": "^11.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.12",
+    "@types/pg": "^8.11.6",
+    "@types/cheerio": "^0.22.35",
+    "ts-node": "^10.9.2"
+  }
+}

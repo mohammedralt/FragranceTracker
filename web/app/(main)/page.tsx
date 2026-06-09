@@ -1,0 +1,144 @@
+import { Suspense } from 'react';
+import Link from 'next/link';
+import { Search, TrendingDown, Bell, RefreshCw } from 'lucide-react';
+import { getFeaturedFragrances, getFragrancePrices } from '@/lib/db';
+import { FragranceCard } from '@/components/FragranceCard';
+
+async function FeaturedGrid() {
+  let withPrices: { fragrance: Awaited<ReturnType<typeof getFeaturedFragrances>>[0]; cheapest: Awaited<ReturnType<typeof getFragrancePrices>>[0] | null }[] = [];
+
+  try {
+    const fragrances = await getFeaturedFragrances(12);
+    withPrices = await Promise.all(
+      fragrances.map(async (f) => {
+        const prices = await getFragrancePrices(f.id);
+        return { fragrance: f, cheapest: prices[0] ?? null };
+      })
+    );
+  } catch {
+    return (
+      <div className="text-center py-16 text-gray-400">
+        <p className="text-lg mb-2">Could not connect to database.</p>
+        <p className="text-sm">Check that your Supabase project is active.</p>
+      </div>
+    );
+  }
+
+  if (withPrices.length === 0) {
+    return (
+      <div className="text-center py-16 text-gray-400">
+        <p className="text-lg mb-2">No fragrances tracked yet.</p>
+        <p className="text-sm">Run the scraper to populate prices.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      {withPrices.map(({ fragrance, cheapest }) => (
+        <FragranceCard key={fragrance.id} fragrance={fragrance} cheapest={cheapest} />
+      ))}
+    </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <div className="flex flex-col">
+      {/* Hero */}
+      <section className="relative bg-gradient-to-br from-brand-950 via-brand-900 to-gray-950 text-white py-24 px-4 overflow-hidden">
+        {/* Background glow */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+        </div>
+
+        <div className="relative max-w-3xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-800/50 text-brand-300 text-xs font-medium mb-6 border border-brand-700/50">
+            <RefreshCw className="h-3 w-3" />
+            Prices updated every 12 hours
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
+            Never overpay for<br />
+            <span className="text-brand-400">your favourite fragrance</span>
+          </h1>
+
+          <p className="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
+            We compare prices across FragranceNet, Jomashop, MaxAroma, FragranceBuy.ca,
+            and more — so you always find the best deal.
+          </p>
+
+          {/* Search */}
+          <form action="/search" method="GET" className="flex gap-2 max-w-lg mx-auto">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="search"
+                name="q"
+                placeholder="Search for Sauvage, Bleu de Chanel, Aventus…"
+                className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white/10 border border-white/20
+                           text-white placeholder:text-gray-400 focus:outline-none
+                           focus:ring-2 focus:ring-brand-400 focus:border-transparent text-sm"
+              />
+            </div>
+            <button type="submit" className="btn-primary px-6 py-3.5 rounded-xl text-base">
+              Search
+            </button>
+          </form>
+        </div>
+      </section>
+
+      {/* Feature strip */}
+      <section className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+          {[
+            {
+              icon: <TrendingDown className="h-6 w-6 text-brand-500" />,
+              title: 'Live price comparison',
+              desc: '11+ retailers tracked in one place',
+            },
+            {
+              icon: <Bell className="h-6 w-6 text-brand-500" />,
+              title: 'Price drop alerts',
+              desc: 'Email you when a price hits your target',
+            },
+            {
+              icon: <RefreshCw className="h-6 w-6 text-brand-500" />,
+              title: 'Updated twice a day',
+              desc: 'Scraped every 12 hours automatically',
+            },
+          ].map((f) => (
+            <div key={f.title} className="flex flex-col items-center gap-2">
+              {f.icon}
+              <p className="font-semibold text-sm">{f.title}</p>
+              <p className="text-xs text-gray-500">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Featured fragrances */}
+      <section className="max-w-6xl mx-auto px-4 py-12">
+        <div className="flex items-baseline justify-between mb-6">
+          <h2 className="text-xl font-bold">Popular fragrances</h2>
+          <Link href="/search?q=" className="text-sm text-brand-600 dark:text-brand-400 hover:underline">
+            Browse all →
+          </Link>
+        </div>
+
+        <Suspense
+          fallback={
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={i} className="card aspect-square animate-pulse bg-gray-100 dark:bg-gray-800" />
+              ))}
+            </div>
+          }
+        >
+          <FeaturedGrid />
+        </Suspense>
+      </section>
+    </div>
+  );
+}
