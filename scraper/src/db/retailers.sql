@@ -1,10 +1,12 @@
--- Run this in Supabase SQL editor to update retailer records
--- Replaces old/incorrect entries with the verified list
+-- Run this in Supabase SQL editor to sync retailer records.
+-- Safe to re-run: upserts by key, never deletes (deleting would cascade and
+-- wipe all tracked_products / price history).
 
-DELETE FROM retailers;
+-- Retire the old CAD store but keep its data intact.
+UPDATE retailers SET is_active = false WHERE key = 'fragrancebuy';
 
 INSERT INTO retailers (key, name, base_url, currency) VALUES
-  ('fragrancebuy',    'FragranceBuy.ca',     'https://www.fragrancebuy.ca',           'CAD'),
+  ('fragflex',        'FragFlex',             'https://fragflex.com',                  'USD'),
   ('beautyhouse',     'Beauty House',         'https://beautyhouse.com',               'USD'),
   ('arvella',         'Arvella Fragrance',    'https://arvellafragrance.com',          'USD'),
   ('aura',            'Aura Fragrance',       'https://www.aurafragrance.com',         'USD'),

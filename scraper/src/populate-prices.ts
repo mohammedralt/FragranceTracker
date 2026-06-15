@@ -32,7 +32,7 @@ async function main() {
   const retailerArg = args[args.indexOf('--retailer') + 1];
   const limitArg = parseInt(args[args.indexOf('--limit') + 1]) || 0;
 
-  const retailerKeys = retailerArg ? [retailerArg] : getRetailerKeys().filter((k) => k !== 'fragrancebuy');
+  const retailerKeys = retailerArg ? [retailerArg] : getRetailerKeys();
 
   // Load all seeded fragrances
   const { rows: fragrances } = await getPool().query<{ id: string; name: string; brand: string }>(

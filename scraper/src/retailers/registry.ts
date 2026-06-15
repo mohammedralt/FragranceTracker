@@ -3,7 +3,7 @@ import { ShopifyScraper } from './shopify';
 import { JomashopScraper } from './jomashop';
 
 const SHOPIFY_RETAILERS = [
-  { key: 'fragrancebuy',   name: 'FragranceBuy.ca',      base_url: 'https://www.fragrancebuy.ca',          currency: 'CAD' },
+  { key: 'fragflex',       name: 'FragFlex',               base_url: 'https://fragflex.com',                 currency: 'USD' },
   { key: 'beautyhouse',    name: 'Beauty House',           base_url: 'https://beautyhouse.com',              currency: 'USD' },
   { key: 'arvella',        name: 'Arvella Fragrance',      base_url: 'https://arvellafragrance.com',         currency: 'USD' },
   { key: 'aura',           name: 'Aura Fragrance',         base_url: 'https://www.aurafragrance.com',        currency: 'USD' },
