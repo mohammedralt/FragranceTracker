@@ -1,7 +1,11 @@
-import { Browser, BrowserContext, Page, chromium } from 'playwright';
+import { Browser, BrowserContext, Page } from 'playwright';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { ProductListing, RetailerConfig, ScrapeResult } from '../types';
 import { parseSize, parsePrice } from '../utils';
 import logger from '../logger';
+
+chromium.use(StealthPlugin());
 
 // Realistic desktop UA — rotate if you start getting blocked
 const USER_AGENTS = [

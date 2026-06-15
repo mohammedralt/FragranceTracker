@@ -1,4 +1,3 @@
-import { Page } from 'playwright';
 import { BaseScraper } from './base';
 import { ProductListing, RetailerConfig } from '../types';
 import logger from '../logger';
@@ -23,26 +22,33 @@ export class FragranceNetScraper extends BaseScraper {
     try {
       const url = this.buildSearchUrl(query);
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-      await this.randomDelay(1000, 2000);
 
-      // VERIFY: Inspect fragrancenet.com search results to confirm selector
-      // Products are in a grid; each card typically has class like .product-tile or [data-product]
-      await page.waitForSelector('.product-tile, [data-component="ProductCard"]', {
-        timeout: 15_000,
-      }).catch(() => null);
+      // Wait for search result cards to appear (up to 12s)
+      await page.waitForSelector('[data-testid="product-grid-card-undefined"]', { timeout: 12_000 }).catch(() => null);
+      await this.randomDelay(1500, 2500);
 
       const items = await page.evaluate(() => {
-        // VERIFY selectors against live DOM before shipping
-        const cards = document.querySelectorAll('.product-tile, [data-component="ProductCard"]');
-        return Array.from(cards).map((card) => ({
-          name: card.querySelector('.product-name, [data-component="ProductName"]')?.textContent?.trim() ?? '',
-          brand: card.querySelector('.brand-name, [data-component="BrandName"]')?.textContent?.trim() ?? '',
-          priceText: card.querySelector('.product-price, [data-component="Price"] .price')?.textContent?.trim() ?? '',
-          href: (card.querySelector('a.product-link, a[data-component="ProductLink"]') as HTMLAnchorElement)?.href ?? '',
-          imageSrc: (card.querySelector('img.product-image') as HTMLImageElement)?.src ?? '',
-          sizeText: card.querySelector('.product-size, [data-component="Size"]')?.textContent?.trim() ?? '',
-          inStock: !card.querySelector('.out-of-stock, [data-component="OutOfStock"]'),
-        }));
+        const cards = document.querySelectorAll('[data-testid="product-grid-card-undefined"]');
+        return Array.from(cards).map((card) => {
+          const titleEl = card.querySelector('[data-testid="product-card-title"]') as HTMLAnchorElement | null;
+          const imgEl = card.querySelector('img[alt]') as HTMLImageElement | null;
+          const sizeText = card.querySelector('.truncate.text-black.thin-font')?.textContent?.trim() ?? '';
+
+          // Price lives in a <p> or <span> with a $ sign — walk all text nodes
+          let priceText = '';
+          card.querySelectorAll('p, span, div').forEach((el) => {
+            const t = el.textContent?.trim() ?? '';
+            if (!priceText && /^\$[0-9]/.test(t) && el.children.length === 0) priceText = t;
+          });
+
+          return {
+            name: titleEl?.textContent?.trim() ?? '',
+            href: titleEl?.href ?? '',
+            imageSrc: imgEl?.src ?? imgEl?.dataset?.src ?? '',
+            sizeText,
+            priceText,
+          };
+        });
       });
 
       for (const item of items) {
@@ -51,15 +57,21 @@ export class FragranceNetScraper extends BaseScraper {
         if (!price) continue;
         const size = this.parseSize(item.sizeText || item.name);
 
+        // Brand is not in the card — extract from URL path: /fn/cologne/{brand}/...
+        const brandMatch = item.href.match(/\/fn\/(?:cologne|perfume|fragrance)\/([^/]+)\//);
+        const brand = brandMatch
+          ? brandMatch[1].replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+          : query;
+
         products.push({
           name: item.name,
-          brand: item.brand || query,
+          brand,
           price,
           currency: 'USD',
           size_ml: size.ml,
           url: item.href.startsWith('http') ? item.href : CONFIG.base_url + item.href,
           image_url: item.imageSrc || null,
-          in_stock: item.inStock,
+          in_stock: true,
         });
       }
     } finally {
@@ -74,16 +86,23 @@ export class FragranceNetScraper extends BaseScraper {
 
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-      await this.randomDelay(800, 1500);
+      await this.randomDelay(1000, 2000);
 
-      // VERIFY: On a product page, fragrancenet shows size options as a dropdown or button group
       const data = await page.evaluate(() => {
-        const name = document.querySelector('h1.product-title, [data-component="ProductTitle"]')?.textContent?.trim() ?? '';
-        const brand = document.querySelector('.brand-name, [itemprop="brand"]')?.textContent?.trim() ?? '';
-        const priceText = document.querySelector('[data-component="Price"] .price, .product-price')?.textContent?.trim() ?? '';
-        const sizeText = document.querySelector('.selected-size, [data-component="SelectedSize"]')?.textContent?.trim() ?? '';
-        const imageSrc = (document.querySelector('img.product-main-image') as HTMLImageElement)?.src ?? '';
-        const outOfStock = !!document.querySelector('.out-of-stock-label, [data-component="OutOfStock"]');
+        const name = document.querySelector('h1')?.textContent?.trim() ?? '';
+        const brandMatch = window.location.pathname.match(/\/fn\/(?:cologne|perfume|fragrance)\/([^/]+)\//);
+        const brand = brandMatch ? brandMatch[1].replace(/-/g, ' ') : '';
+
+        let priceText = '';
+        document.querySelectorAll('p, span').forEach((el) => {
+          const t = el.textContent?.trim() ?? '';
+          if (!priceText && /^\$[0-9]/.test(t) && el.children.length === 0) priceText = t;
+        });
+
+        const sizeText = document.querySelector('[class*="size"], [class*="Size"]')?.textContent?.trim() ?? '';
+        const imageSrc = (document.querySelector('img[alt][src*="cdn.fragrancenet"]') as HTMLImageElement)?.src ?? '';
+        const outOfStock = document.body.textContent?.toLowerCase().includes('out of stock') ?? false;
+
         return { name, brand, priceText, sizeText, imageSrc, outOfStock };
       });
 
@@ -91,7 +110,6 @@ export class FragranceNetScraper extends BaseScraper {
       if (!data.name || !price) return null;
 
       const size = this.parseSize(data.sizeText || data.name);
-
       return {
         name: data.name,
         brand: data.brand,
