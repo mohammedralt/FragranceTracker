@@ -70,15 +70,17 @@ export async function upsertTrackedProduct(
   fragranceId: string,
   retailerId: string,
   productUrl: string,
-  sizeMl: number | null
+  sizeMl: number | null,
+  variantLabel: string | null = null
 ): Promise<string> {
   const { rows } = await getPool().query<{ id: string }>(
-    `INSERT INTO tracked_products (fragrance_id, retailer_id, product_url, size_ml)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO tracked_products (fragrance_id, retailer_id, product_url, size_ml, variant_label)
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (fragrance_id, retailer_id, size_ml)
-     DO UPDATE SET product_url = EXCLUDED.product_url
+     DO UPDATE SET product_url = EXCLUDED.product_url,
+                   variant_label = EXCLUDED.variant_label
      RETURNING id`,
-    [fragranceId, retailerId, productUrl, sizeMl]
+    [fragranceId, retailerId, productUrl, sizeMl, variantLabel]
   );
   return rows[0].id;
 }
@@ -192,7 +194,8 @@ export async function saveScrapedProduct(
     fragranceId,
     retailerId,
     product.url,
-    product.size_ml
+    product.size_ml,
+    product.variant_label
   );
 
   await recordPriceSnapshot(trackedId, product.price, product.currency, product.in_stock);

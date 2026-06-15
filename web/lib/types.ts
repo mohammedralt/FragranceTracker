@@ -26,6 +26,7 @@ export interface TrackedProduct {
   retailer_name: string;
   product_url: string;
   size_ml: number | null;
+  variant_label: string | null;
   last_price: number | null;
   last_in_stock: boolean | null;
   last_scraped_at: string | null;

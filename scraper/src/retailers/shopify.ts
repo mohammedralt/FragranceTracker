@@ -30,6 +30,29 @@ const HEADERS = {
   'Accept': 'application/json',
 };
 
+/**
+ * Builds a human-readable label describing what a listing actually is —
+ * "100ml", "3.4 oz", "Sample", "Tester", etc. Prefers the variant title,
+ * then a size parsed from the product title, then a descriptor word.
+ */
+function buildVariantLabel(variantTitle: string | undefined, productTitle: string, sizeMl: number | null): string | null {
+  const vt = (variantTitle ?? '').trim();
+  if (vt && vt.toLowerCase() !== 'default title') return vt;
+
+  if (sizeMl) {
+    const oz = (sizeMl / 29.5735).toFixed(1);
+    return `${sizeMl}ml / ${oz} oz`;
+  }
+
+  // No size — try to label samples/testers from the product title
+  const lower = productTitle.toLowerCase();
+  if (lower.includes('sample') || lower.includes('decant')) return 'Sample';
+  if (lower.includes('travel')) return 'Travel Spray';
+  if (lower.includes('tester')) return 'Tester';
+  if (lower.includes('miniature') || lower.includes('mini ')) return 'Miniature';
+  return null;
+}
+
 export class ShopifyScraper extends BaseScraper {
   constructor(config: RetailerConfig) {
     super(config);
@@ -57,6 +80,7 @@ export class ShopifyScraper extends BaseScraper {
         if (!price) continue;
 
         const sizeSource = best?.title ?? item.title;
+        const sizeMl = parseSize(sizeSource).ml ?? parseSize(item.title).ml;
         const productUrl = best ? this.config.base_url + best.url : this.config.base_url + item.url;
         const imageUrl = (item as any).featured_image?.url ?? item.image ?? null;
 
@@ -65,7 +89,8 @@ export class ShopifyScraper extends BaseScraper {
           brand: item.vendor || query,
           price,
           currency: this.config.currency,
-          size_ml: parseSize(sizeSource).ml,
+          size_ml: sizeMl,
+          variant_label: buildVariantLabel(best?.title, item.title, sizeMl),
           url: productUrl,
           image_url: imageUrl,
           in_stock: best ? best.available : item.available,
@@ -122,13 +147,15 @@ export class ShopifyScraper extends BaseScraper {
 
       // product.js prices are in cents
       const price = parseFloat(best.price) / 100;
+      const sizeMl = parseSize(best.title).ml ?? parseSize(data.title).ml;
 
       return {
         name: data.title,
         brand: data.vendor,
         price,
         currency: this.config.currency,
-        size_ml: parseSize(best.title).ml,
+        size_ml: sizeMl,
+        variant_label: buildVariantLabel(best.title, data.title, sizeMl),
         url: `${this.config.base_url}/products/${handle}?variant=${best.id}`,
         image_url: data.featured_image ?? null,
         in_stock: best.available,

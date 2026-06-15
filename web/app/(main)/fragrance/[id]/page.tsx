@@ -155,8 +155,10 @@ export default async function FragrancePage({ params }: PageProps) {
                         </span>
                       )}
                     </div>
-                    {p.size_ml && (
-                      <p className="text-xs text-gray-400 mt-0.5">{formatSize(p.size_ml)}</p>
+                    {(p.variant_label || p.size_ml) && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {p.variant_label ?? formatSize(p.size_ml)}
+                      </p>
                     )}
                   </div>
 

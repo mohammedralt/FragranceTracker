@@ -72,7 +72,8 @@ async function main() {
               fragrance.id,
               retailerId,
               product.url,
-              product.size_ml
+              product.size_ml,
+              product.variant_label
             );
             await recordPriceSnapshot(trackedId, product.price, product.currency, product.in_stock);
             console.log(`  [${retailerKey}] ${product.currency} $${product.price.toFixed(2)} — ${product.name}`);

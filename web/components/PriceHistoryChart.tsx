@@ -38,7 +38,7 @@ export function PriceHistoryChart({ data }: PriceHistoryChartProps) {
       month: 'short', day: 'numeric',
     });
     if (!byDate.has(date)) byDate.set(date, {});
-    byDate.get(date)![point.retailer_key] = point.price;
+    byDate.get(date)![point.retailer_key] = Number(point.price);
   }
 
   const chartData = Array.from(byDate.entries()).map(([date, prices]) => ({
@@ -74,8 +74,8 @@ export function PriceHistoryChart({ data }: PriceHistoryChartProps) {
             borderRadius: '8px',
             fontSize: '12px',
           }}
-          formatter={(value: number, key: string) => [
-            `$${value.toFixed(2)}`,
+          formatter={(value: number | string, key: string) => [
+            `$${Number(value).toFixed(2)}`,
             retailerNames[key] ?? key,
           ]}
         />

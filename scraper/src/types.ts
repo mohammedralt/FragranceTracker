@@ -6,6 +6,7 @@ export interface ProductListing {
   price: number;
   currency: Currency;
   size_ml: number | null;
+  variant_label: string | null;
   url: string;
   image_url: string | null;
   in_stock: boolean;

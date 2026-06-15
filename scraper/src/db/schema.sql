@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS tracked_products (
   retailer_id   UUID NOT NULL REFERENCES retailers (id) ON DELETE CASCADE,
   product_url   TEXT NOT NULL,
   size_ml       INTEGER,
+  variant_label TEXT,                  -- "100ml", "3.4 oz", "Sample", "Tester", etc.
   last_price    NUMERIC(10, 2),
   last_in_stock BOOLEAN,
   last_scraped_at TIMESTAMPTZ,

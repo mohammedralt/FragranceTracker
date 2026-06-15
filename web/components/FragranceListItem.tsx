@@ -12,8 +12,8 @@ interface Props {
 
 function isGoodDeal(cheapest: TrackedProduct | null, all: TrackedProduct[]): boolean {
   if (!cheapest?.last_price || all.length < 2) return false;
-  const avg = all.reduce((s, p) => s + (p.last_price ?? 0), 0) / all.length;
-  return cheapest.last_price < avg * 0.88;
+  const avg = all.reduce((s, p) => s + Number(p.last_price ?? 0), 0) / all.length;
+  return Number(cheapest.last_price) < avg * 0.88;
 }
 
 export function FragranceListItem({ fragrance, cheapest, storeCount, allPrices }: Props) {
@@ -48,8 +48,10 @@ export function FragranceListItem({ fragrance, cheapest, storeCount, allPrices }
         <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">{fragrance.brand}</p>
         <p className="font-semibold text-gray-900 truncate">{fragrance.name}</p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {cheapest?.size_ml && (
-            <span className="text-xs text-gray-500">{formatSize(cheapest.size_ml)}</span>
+          {(cheapest?.variant_label || cheapest?.size_ml) && (
+            <span className="text-xs text-gray-500">
+              {cheapest.variant_label ?? formatSize(cheapest.size_ml)}
+            </span>
           )}
           {goodDeal && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-brand-600 text-white">
