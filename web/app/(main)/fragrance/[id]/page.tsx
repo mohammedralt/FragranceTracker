@@ -176,7 +176,6 @@ export default async function FragrancePage({ params }: PageProps) {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors"
-                    onClick={(e) => e.stopPropagation()}
                   >
                     View deal
                     <ExternalLink className="h-3.5 w-3.5" />
