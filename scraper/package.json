@@ -9,7 +9,8 @@
     "scrape": "ts-node src/scrape.ts",
     "worker": "ts-node src/queue/worker.ts",
     "scheduler": "ts-node src/queue/scheduler.ts",
-    "install:browsers": "playwright install chromium"
+    "install:browsers": "playwright install chromium",
+    "populate": "ts-node src/populate-prices.ts"
   },
   "dependencies": {
     "axios": "^1.7.2",
