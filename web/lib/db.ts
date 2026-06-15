@@ -17,6 +17,13 @@ function getPool(): Pool {
 // ─── Fragrances ──────────────────────────────────────────────────────────────
 
 export async function searchFragrances(query: string, limit = 20): Promise<Fragrance[]> {
+  if (!query.trim()) {
+    const { rows } = await getPool().query<Fragrance>(
+      `SELECT * FROM fragrances ORDER BY brand, name LIMIT $1`,
+      [limit]
+    );
+    return rows;
+  }
   const { rows } = await getPool().query<Fragrance>(
     `SELECT * FROM fragrances
      WHERE to_tsvector('english', name || ' ' || brand) @@ plainto_tsquery('english', $1)
@@ -27,6 +34,11 @@ export async function searchFragrances(query: string, limit = 20): Promise<Fragr
     [query, `%${query}%`, limit]
   );
   return rows;
+}
+
+export async function countFragrances(): Promise<number> {
+  const { rows } = await getPool().query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM fragrances`);
+  return parseInt(rows[0].count, 10);
 }
 
 export async function getFragranceById(id: string): Promise<Fragrance | null> {

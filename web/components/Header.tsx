@@ -53,6 +53,7 @@ export function Header({ session }: HeaderProps) {
 
         {/* Nav */}
         <nav className="hidden md:flex items-center gap-1 ml-auto">
+          <Link href="/search" className="btn-ghost text-sm">Browse</Link>
           {session ? (
             <>
               <Link href="/dashboard" className="btn-ghost">

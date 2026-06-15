@@ -65,7 +65,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
-            We compare prices across FragranceNet, Jomashop, MaxAroma, FragranceBuy.ca,
+            We compare prices across Jomashop, Olfactory Factory, Fragrance Nevaeh, Fragrance Lord,
             and more — so you always find the best deal.
           </p>
 
