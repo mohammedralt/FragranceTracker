@@ -1,5 +1,6 @@
 import { BaseScraper } from './base';
 import { ProductListing, RetailerConfig } from '../types';
+import { parseSize } from '../utils';
 import logger from '../logger';
 
 const CONFIG: RetailerConfig = {
@@ -7,10 +8,16 @@ const CONFIG: RetailerConfig = {
   name: 'Jomashop',
   base_url: 'https://www.jomashop.com',
   currency: 'USD',
-  // Jomashop uses a category search URL; fragrance department is /fragrance
-  search_url_template: 'https://www.jomashop.com/fragrance.html?q={query}',
+  search_url_template: 'https://www.jomashop.com/search?q={query}',
 };
 
+/**
+ * Jomashop is Magento + Algolia InstantSearch behind Cloudflare.
+ * A real (stealth) Chrome passes Cloudflare where plain HTTP gets dropped on
+ * the TLS fingerprint. We load the homepage first to obtain the cf_clearance
+ * cookie, then hit the search page and scrape the rendered `.ais-Hits-item`
+ * cards (no API keys needed).
+ */
 export class JomashopScraper extends BaseScraper {
   constructor() {
     super(CONFIG);
@@ -21,53 +28,68 @@ export class JomashopScraper extends BaseScraper {
     const products: ProductListing[] = [];
 
     try {
-      const url = this.buildSearchUrl(query);
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      // 1. Clear Cloudflare on the homepage (sets cf_clearance cookie)
+      await page.goto(CONFIG.base_url, { waitUntil: 'domcontentloaded', timeout: 40_000 });
       await this.randomDelay(1500, 2500);
 
-      // Jomashop uses Cloudflare — you may see a challenge page.
-      // If so, waitForNavigation after the challenge auto-solves (or use a proxy).
-      const isChallenged = await page.evaluate(() =>
-        document.title.toLowerCase().includes('just a moment') ||
-        document.title.toLowerCase().includes('cloudflare')
-      );
-      if (isChallenged) {
-        logger.warn({ retailer: 'jomashop' }, 'Cloudflare challenge detected — waiting for auto-solve');
-        await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20_000 }).catch(() => null);
-      }
-
-      // VERIFY: Jomashop product cards are likely `.product-item` or `[data-product-sku]`
-      await page.waitForSelector('.product-item, [data-product-sku]', { timeout: 15_000 }).catch(() => null);
+      // 2. Run the search
+      await page.goto(this.buildSearchUrl(query), { waitUntil: 'domcontentloaded', timeout: 40_000 });
+      await page.waitForSelector('.ais-Hits-item', { timeout: 15_000 }).catch(() => null);
+      await this.randomDelay(1200, 2000);
 
       const items = await page.evaluate(() => {
-        const cards = document.querySelectorAll('.product-item, [data-product-sku]');
-        return Array.from(cards).map((card) => ({
-          name: card.querySelector('.product-name, .item-name')?.textContent?.trim() ?? '',
-          brand: card.querySelector('.product-brand, .brand')?.textContent?.trim() ?? '',
-          priceText: card.querySelector('.price, .product-price')?.textContent?.trim() ?? '',
-          href: (card.querySelector('a.product-link, a.item-link') as HTMLAnchorElement)?.href ?? '',
-          imageSrc: (card.querySelector('img') as HTMLImageElement)?.src ?? '',
-          sizeText: card.querySelector('.product-size, .size')?.textContent?.trim() ?? '',
-          inStock: !card.querySelector('.out-of-stock, .sold-out'),
-        }));
+        const cards = document.querySelectorAll('.ais-Hits-item');
+        return Array.from(cards).map((card) => {
+          const block = card.querySelector('.productItemBlock') ?? card;
+          const sku = block.getAttribute('data-sku') ?? '';
+          const linkEl = card.querySelector('a.productImg-link, a[href$=".html"]') as HTMLAnchorElement | null;
+          const href = linkEl?.getAttribute('href') ?? block.getAttribute('data-scroll-target') ?? '';
+          const img = card.querySelector('img') as HTMLImageElement | null;
+          const imgSrc = img?.getAttribute('src') ?? img?.getAttribute('data-src') ?? '';
+          const altName = img?.alt?.trim() ?? '';
+
+          // Collect exact "$123.45" price texts (excludes "$50.00 coupon" etc.)
+          const prices: number[] = [];
+          card.querySelectorAll('*').forEach((el) => {
+            const t = el.textContent?.trim() ?? '';
+            if (/^\$[\d,]+\.\d{2}$/.test(t)) prices.push(parseFloat(t.replace(/[$,]/g, '')));
+          });
+
+          return { sku, href, imgSrc, altName, prices };
+        });
       });
 
       for (const item of items) {
-        if (!item.name || !item.href) continue;
-        const price = this.parsePrice(item.priceText);
+        if (!item.href || item.prices.length === 0) continue;
+
+        // Sale price = lowest of the displayed main prices (MSRP is the highest)
+        const price = Math.min(...item.prices);
         if (!price) continue;
-        const size = this.parseSize(item.sizeText || item.name);
+
+        // Derive brand from the URL slug: "creed-mens-..." → "creed",
+        // "parfums-de-marly-mens-..." → "parfums de marly"
+        const slug = item.href.replace(/^\/+/, '').replace(/\.html.*$/, '');
+        const brandSlug = slug.split(/-(?:mens|womens|unisex|kids)-/i)[0] ?? '';
+        const brand = brandSlug
+          ? brandSlug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+          : query;
+
+        // Clean the name: drop trailing "Fragrances <barcode>"
+        const cleanName = item.altName.replace(/\s*Fragrances?\s*\d+\s*$/i, '').trim() || slug.replace(/-/g, ' ');
+        const name = `${brand} ${cleanName}`.replace(/\s+/g, ' ').trim();
+
+        const size = parseSize(item.altName);
 
         products.push({
-          name: item.name,
-          brand: item.brand || query,
+          name,
+          brand,
           price,
           currency: 'USD',
           size_ml: size.ml,
           variant_label: size.ml ? `${size.ml}ml / ${(size.ml / 29.5735).toFixed(1)} oz` : null,
           url: item.href.startsWith('http') ? item.href : CONFIG.base_url + item.href,
-          image_url: item.imageSrc || null,
-          in_stock: item.inStock,
+          image_url: item.imgSrc || null,
+          in_stock: true,
         });
       }
     } catch (err) {
@@ -83,33 +105,36 @@ export class JomashopScraper extends BaseScraper {
     const page = await this.newPage();
 
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await page.goto(CONFIG.base_url, { waitUntil: 'domcontentloaded', timeout: 40_000 });
+      await this.randomDelay(1000, 2000);
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 });
       await this.randomDelay(1000, 2000);
 
       const data = await page.evaluate(() => {
-        // VERIFY: Jomashop product page selectors
-        const name = document.querySelector('h1.product-title, [itemprop="name"]')?.textContent?.trim() ?? '';
-        const brand = document.querySelector('[itemprop="brand"], .product-brand')?.textContent?.trim() ?? '';
-        const priceText = document.querySelector('[itemprop="price"], .price-box .price')?.textContent?.trim() ?? '';
-        const sizeText = document.querySelector('.size-option.selected, .product-size')?.textContent?.trim() ?? '';
-        const imageSrc = (document.querySelector('[itemprop="image"], img.product-image') as HTMLImageElement)?.src ?? '';
-        const outOfStock = !!document.querySelector('.out-of-stock, [data-out-of-stock]');
-        return { name, brand, priceText, sizeText, imageSrc, outOfStock };
+        const name = document.querySelector('h1')?.textContent?.trim() ?? '';
+        const prices: number[] = [];
+        document.querySelectorAll('[class*="price" i], span, div').forEach((el) => {
+          const t = el.textContent?.trim() ?? '';
+          if (/^\$[\d,]+\.\d{2}$/.test(t)) prices.push(parseFloat(t.replace(/[$,]/g, '')));
+        });
+        const img = document.querySelector('img[src*="catalog/product"]') as HTMLImageElement | null;
+        const outOfStock = /out of stock|sold out/i.test(document.body.textContent ?? '');
+        return { name, prices, imgSrc: img?.src ?? '', outOfStock };
       });
 
-      const price = this.parsePrice(data.priceText);
-      if (!data.name || !price) return null;
+      if (!data.name || data.prices.length === 0) return null;
+      const price = Math.min(...data.prices);
+      const size = parseSize(data.name);
 
-      const size = this.parseSize(data.sizeText || data.name);
       return {
-        name: data.name,
-        brand: data.brand,
+        name: data.name.replace(/\s*Fragrances?\s*\d+\s*$/i, '').trim(),
+        brand: data.name.split(/\s+/)[0],
         price,
         currency: 'USD',
         size_ml: size.ml,
         variant_label: size.ml ? `${size.ml}ml / ${(size.ml / 29.5735).toFixed(1)} oz` : null,
         url,
-        image_url: data.imageSrc || null,
+        image_url: data.imgSrc || null,
         in_stock: !data.outOfStock,
       };
     } catch (err) {
