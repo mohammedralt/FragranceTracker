@@ -5,3 +5,5 @@ dist/
 .next/
 *.tsbuildinfo
 debug-*.html
+*.log
+populate.log
