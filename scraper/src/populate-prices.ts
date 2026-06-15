@@ -19,9 +19,21 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Non-fragrance products that pollute search results (body care, home, etc.)
+const ACCESSORY_PATTERNS = [
+  'body wash', 'body lotion', 'body cream', 'body crème', 'shower gel', 'bath gel',
+  'hand cream', 'hand cleanser', 'hair perfume', 'hair mist', 'hair oil',
+  'shampoo', 'conditioner', 'deodorant', 'soap', 'candle', 'diffuser',
+  'lip balm', 'shave', 'aftershave', 'roll-on', 'rollerball reed',
+];
+
 // Returns true if the product title plausibly matches the fragrance name
 function isRelevantResult(product: ProductListing, fragranceName: string, brand: string): boolean {
   const title = product.name.toLowerCase();
+
+  // Reject non-fragrance accessories (body wash, candles, hair mist, etc.)
+  if (ACCESSORY_PATTERNS.some((p) => title.includes(p))) return false;
+
   const nameParts = fragranceName.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
   // All significant words in the fragrance name must appear in the product title
   return nameParts.every((w) => title.includes(w)) && title.includes(brand.toLowerCase().split(' ')[0]);
