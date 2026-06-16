@@ -78,6 +78,7 @@ export async function getFragrancePrices(fragranceId: string): Promise<TrackedPr
        tp.id, tp.fragrance_id, tp.retailer_id,
        r.key AS retailer_key, r.name AS retailer_name,
        tp.product_url, tp.size_ml, tp.variant_label,
+       (tp.product_url ILIKE '%tester%' OR tp.variant_label ILIKE '%tester%') AS is_tester,
        tp.last_price, tp.last_in_stock, tp.last_scraped_at,
        r.currency
      FROM tracked_products tp

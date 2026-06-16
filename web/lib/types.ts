@@ -33,6 +33,7 @@ export interface TrackedProduct {
   product_url: string;
   size_ml: number | null;
   variant_label: string | null;
+  is_tester: boolean;
   last_price: number | null;
   last_in_stock: boolean | null;
   last_scraped_at: string | null;

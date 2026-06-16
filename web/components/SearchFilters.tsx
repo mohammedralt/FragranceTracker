@@ -39,6 +39,12 @@ const SEASONS = [
   { value: 'winter', label: 'Winter' },
 ];
 
+const TESTER = [
+  { value: '', label: 'Testers: Include' },
+  { value: 'hide', label: 'Hide Testers' },
+  { value: 'only', label: 'Testers Only' },
+];
+
 /** A styled <select> that looks like a rounded chip and navigates on change. */
 function FilterSelect({
   value,
@@ -86,6 +92,7 @@ export function SearchFilters({ stores }: SearchFiltersProps) {
   const store = params.get('store') ?? '';
   const size = params.get('size') ?? '';
   const season = params.get('season') ?? '';
+  const tester = params.get('tester') ?? '';
   const inStock = params.get('inStock') === 'true';
 
   function setParam(key: string, value: string) {
@@ -107,6 +114,7 @@ export function SearchFilters({ stores }: SearchFiltersProps) {
       <FilterSelect value={store} options={storeOptions} onChange={(v) => setParam('store', v)} active={!!store} />
       <FilterSelect value={size} options={SIZES} onChange={(v) => setParam('size', v)} active={!!size} />
       <FilterSelect value={season} options={SEASONS} onChange={(v) => setParam('season', v)} active={!!season} />
+      <FilterSelect value={tester} options={TESTER} onChange={(v) => setParam('tester', v)} active={!!tester} />
 
       <button
         onClick={() => setParam('inStock', inStock ? '' : 'true')}

@@ -15,6 +15,7 @@ interface SearchPageProps {
     store?: string;
     size?: string;
     season?: string;
+    tester?: string;
   };
 }
 
@@ -46,6 +47,7 @@ interface Filters {
   store: string;
   size: string;
   season: string;
+  tester: string;
 }
 
 /** True if `season` is among the fragrance's dominant seasons (within 80% of its top score). */
@@ -93,6 +95,8 @@ async function Results({ filters }: { filters: Filters }) {
       if (filters.store) relevant = relevant.filter((p) => p.retailer_key === filters.store);
       if (filters.size) relevant = relevant.filter((p) => sizeMatches(p, filters.size));
       if (filters.inStock) relevant = relevant.filter((p) => p.last_in_stock);
+      if (filters.tester === 'hide') relevant = relevant.filter((p) => !p.is_tester);
+      else if (filters.tester === 'only') relevant = relevant.filter((p) => p.is_tester);
       return { fragrance: f, allPrices, relevant };
     })
   );
@@ -166,6 +170,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     store: searchParams.store ?? '',
     size: searchParams.size ?? '',
     season: searchParams.season ?? '',
+    tester: searchParams.tester ?? '',
   };
 
   let stores: { key: string; name: string }[] = [];
