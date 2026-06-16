@@ -41,6 +41,13 @@ export async function countFragrances(): Promise<number> {
   return parseInt(rows[0].count, 10);
 }
 
+export async function getRetailers(): Promise<{ key: string; name: string }[]> {
+  const { rows } = await getPool().query<{ key: string; name: string }>(
+    `SELECT key, name FROM retailers WHERE is_active = true ORDER BY name`
+  );
+  return rows;
+}
+
 export async function getFragranceById(id: string): Promise<Fragrance | null> {
   const { rows } = await getPool().query<Fragrance>(
     `SELECT * FROM fragrances WHERE id = $1`,

@@ -1,12 +1,20 @@
 import { Suspense } from 'react';
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Search } from 'lucide-react';
-import { searchFragrances, getFragrancePrices, countFragrances } from '@/lib/db';
+import { searchFragrances, getFragrancePrices, countFragrances, getRetailers } from '@/lib/db';
 import { FragranceListItem } from '@/components/FragranceListItem';
+import { SearchFilters } from '@/components/SearchFilters';
+import type { TrackedProduct } from '@/lib/types';
 
 interface SearchPageProps {
-  searchParams: { q?: string; inStock?: string; sort?: string };
+  searchParams: {
+    q?: string;
+    inStock?: string;
+    sort?: string;
+    gender?: string;
+    store?: string;
+    size?: string;
+  };
 }
 
 export function generateMetadata({ searchParams }: SearchPageProps): Metadata {
@@ -14,7 +22,31 @@ export function generateMetadata({ searchParams }: SearchPageProps): Metadata {
   return { title: q ? `"${q}" — Fragrance prices` : 'Browse fragrances' };
 }
 
-async function Results({ query, inStock, sort }: { query: string; inStock: boolean; sort: string }) {
+/** Does a listing's size fall into the chosen bucket? */
+function sizeMatches(p: TrackedProduct, bucket: string): boolean {
+  const ml = p.size_ml;
+  const label = (p.variant_label ?? '').toLowerCase();
+  if (bucket === 'sample') {
+    return (ml != null && ml < 20) || /sample|decant|travel|miniature/.test(label);
+  }
+  if (ml == null) return false;
+  if (bucket === '30') return ml >= 20 && ml < 40;
+  if (bucket === '50') return ml >= 40 && ml < 75;
+  if (bucket === '100') return ml >= 75 && ml < 125;
+  if (bucket === 'large') return ml >= 125;
+  return true;
+}
+
+interface Filters {
+  query: string;
+  inStock: boolean;
+  sort: string;
+  gender: string;
+  store: string;
+  size: string;
+}
+
+async function Results({ filters }: { filters: Filters }) {
   let total = 0;
   try {
     total = await countFragrances();
@@ -22,7 +54,7 @@ async function Results({ query, inStock, sort }: { query: string; inStock: boole
 
   let fragrances;
   try {
-    fragrances = await searchFragrances(query, 100);
+    fragrances = await searchFragrances(filters.query, 300);
   } catch {
     return (
       <div className="text-center py-20 text-gray-500">
@@ -32,46 +64,75 @@ async function Results({ query, inStock, sort }: { query: string; inStock: boole
     );
   }
 
-  if (fragrances.length === 0) {
-    return (
-      <div className="text-center py-20 text-gray-500">
-        <p className="text-xl mb-2">No results for &ldquo;{query}&rdquo;</p>
-        <p className="text-sm">Try a different spelling or browse all fragrances.</p>
-      </div>
-    );
+  if (filters.gender) {
+    fragrances = fragrances.filter((f) => f.gender === filters.gender);
   }
 
-  const withPrices = await Promise.all(
+  const withData = await Promise.all(
     fragrances.map(async (f) => {
-      const prices = await getFragrancePrices(f.id);
-      const inStockPrices = prices.filter((p) => p.last_in_stock);
-      const cheapest = inStockPrices[0] ?? prices[0] ?? null;
-      return { fragrance: f, cheapest, storeCount: prices.length, allPrices: prices };
+      const allPrices = await getFragrancePrices(f.id);
+      // Listings matching the active store / size / stock filters
+      let relevant = allPrices;
+      if (filters.store) relevant = relevant.filter((p) => p.retailer_key === filters.store);
+      if (filters.size) relevant = relevant.filter((p) => sizeMatches(p, filters.size));
+      if (filters.inStock) relevant = relevant.filter((p) => p.last_in_stock);
+      return { fragrance: f, allPrices, relevant };
     })
   );
 
-  let filtered = inStock ? withPrices.filter((r) => r.allPrices.some((p) => p.last_in_stock)) : withPrices;
+  // Keep only fragrances that still have a matching listing
+  let rows = withData
+    .filter((r) => r.relevant.length > 0)
+    .map((r) => {
+      const cheapest = r.relevant[0] ?? null; // getFragrancePrices is sorted price asc
+      const storeCount = new Set(r.relevant.map((p) => p.retailer_key)).size;
+      return { ...r, cheapest, storeCount };
+    });
 
-  if (sort === 'price_asc') {
-    filtered = [...filtered].sort((a, b) => (a.cheapest?.last_price ?? Infinity) - (b.cheapest?.last_price ?? Infinity));
-  } else if (sort === 'price_desc') {
-    filtered = [...filtered].sort((a, b) => (b.cheapest?.last_price ?? 0) - (a.cheapest?.last_price ?? 0));
+  // Sorting
+  const priceOf = (p: TrackedProduct | null) => (p?.last_price != null ? Number(p.last_price) : Infinity);
+  const avgOf = (list: TrackedProduct[]) =>
+    list.length ? list.reduce((s, p) => s + Number(p.last_price ?? 0), 0) / list.length : Infinity;
+
+  if (filters.sort === 'price_asc') {
+    rows.sort((a, b) => priceOf(a.cheapest) - priceOf(b.cheapest));
+  } else if (filters.sort === 'price_desc') {
+    rows.sort((a, b) => priceOf(b.cheapest) - priceOf(a.cheapest));
+  } else if (filters.sort === 'name_asc') {
+    rows.sort((a, b) =>
+      `${a.fragrance.brand} ${a.fragrance.name}`.localeCompare(`${b.fragrance.brand} ${b.fragrance.name}`)
+    );
+  } else if (filters.sort === 'best_deal') {
+    // Lowest cheapest-vs-average ratio = best relative deal
+    rows.sort((a, b) => priceOf(a.cheapest) / avgOf(a.allPrices) - priceOf(b.cheapest) / avgOf(b.allPrices));
+  } else {
+    // popular: most listings first
+    rows.sort((a, b) => b.allPrices.length - a.allPrices.length);
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="text-center py-20 text-gray-500">
+        <p className="text-xl mb-2">No fragrances match those filters.</p>
+        <p className="text-sm">Try removing a filter or searching a different term.</p>
+      </div>
+    );
   }
 
   return (
     <>
       <p className="text-sm text-gray-500 mb-4">
-        Showing {filtered.length} {filtered.length === 1 ? 'fragrance' : 'fragrances'}
-        {!query && total > 0 && ` from ${total} total`}
+        Showing {rows.length} {rows.length === 1 ? 'fragrance' : 'fragrances'}
+        {!filters.query && total > 0 && ` of ${total}`}
       </p>
       <div className="flex flex-col gap-3">
-        {filtered.map(({ fragrance, cheapest, storeCount, allPrices }) => (
+        {rows.map(({ fragrance, cheapest, storeCount, relevant }) => (
           <FragranceListItem
             key={fragrance.id}
             fragrance={fragrance}
             cheapest={cheapest}
             storeCount={storeCount}
-            allPrices={allPrices}
+            allPrices={relevant}
           />
         ))}
       </div>
@@ -79,33 +140,27 @@ async function Results({ query, inStock, sort }: { query: string; inStock: boole
   );
 }
 
-export default function SearchPage({ searchParams }: SearchPageProps) {
-  const query = searchParams.q ?? '';
-  const inStock = searchParams.inStock === 'true';
-  const sort = searchParams.sort ?? 'popular';
+export default async function SearchPage({ searchParams }: SearchPageProps) {
+  const filters: Filters = {
+    query: searchParams.q ?? '',
+    inStock: searchParams.inStock === 'true',
+    sort: searchParams.sort ?? 'popular',
+    gender: searchParams.gender ?? '',
+    store: searchParams.store ?? '',
+    size: searchParams.size ?? '',
+  };
 
-  function chipHref(params: Record<string, string | undefined>) {
-    const p = new URLSearchParams();
-    if (query) p.set('q', query);
-    if (params.inStock !== undefined) { if (params.inStock) p.set('inStock', params.inStock); }
-    else if (inStock) p.set('inStock', 'true');
-    if (params.sort !== undefined) { if (params.sort) p.set('sort', params.sort); }
-    else if (sort && sort !== 'popular') p.set('sort', sort);
-    return `/search?${p.toString()}`;
-  }
-
-  const sortOptions = [
-    { label: 'Most Popular', value: 'popular' },
-    { label: 'Price: Low to High', value: 'price_asc' },
-    { label: 'Price: High to Low', value: 'price_desc' },
-  ];
+  let stores: { key: string; name: string }[] = [];
+  try {
+    stores = await getRetailers();
+  } catch { /* ignore */ }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
       <div className="mb-8">
         <h1 className="text-2xl font-bold mb-1">Search Fragrances</h1>
         <p className="text-gray-500 text-sm mb-6">
-          Browse our catalog of niche and designer fragrances from top houses. Search by brand or name to compare prices.
+          Browse our catalog of niche and designer fragrances from top houses. Search, sort and filter to find the best price.
         </p>
 
         {/* Search bar */}
@@ -115,7 +170,7 @@ export default function SearchPage({ searchParams }: SearchPageProps) {
             <input
               type="search"
               name="q"
-              defaultValue={query}
+              defaultValue={filters.query}
               placeholder="Search by brand or fragrance name…"
               className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             />
@@ -125,36 +180,11 @@ export default function SearchPage({ searchParams }: SearchPageProps) {
           </button>
         </form>
 
-        {/* Filter chips */}
-        <div className="flex flex-wrap gap-2">
-          {sortOptions.map((opt) => (
-            <Link
-              key={opt.value}
-              href={chipHref({ sort: opt.value === 'popular' ? undefined : opt.value })}
-              className={`px-3.5 py-1.5 rounded-full text-sm border transition-colors ${
-                sort === opt.value || (opt.value === 'popular' && sort === 'popular')
-                  ? 'bg-brand-600 text-white border-brand-600'
-                  : 'bg-white text-gray-600 border-gray-300 hover:border-brand-400'
-              }`}
-            >
-              {opt.label}
-            </Link>
-          ))}
-
-          <Link
-            href={chipHref({ inStock: inStock ? undefined : 'true' })}
-            className={`px-3.5 py-1.5 rounded-full text-sm border transition-colors ${
-              inStock
-                ? 'bg-brand-600 text-white border-brand-600'
-                : 'bg-white text-gray-600 border-gray-300 hover:border-brand-400'
-            }`}
-          >
-            In Stock
-          </Link>
-        </div>
+        <SearchFilters stores={stores} />
       </div>
 
       <Suspense
+        key={JSON.stringify(filters)}
         fallback={
           <div className="flex flex-col gap-3">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -163,7 +193,7 @@ export default function SearchPage({ searchParams }: SearchPageProps) {
           </div>
         }
       >
-        <Results query={query} inStock={inStock} sort={sort} />
+        <Results filters={filters} />
       </Suspense>
     </div>
   );
