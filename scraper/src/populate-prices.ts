@@ -91,6 +91,15 @@ async function main() {
             console.log(`  [${retailerKey}] ${product.currency} $${product.price.toFixed(2)} — ${product.name}`);
             totalSaved++;
           }
+
+          // Backfill the fragrance image from a scraped product (only if missing)
+          const withImage = relevant.find((p) => p.image_url);
+          if (withImage?.image_url) {
+            await getPool().query(
+              `UPDATE fragrances SET image_url = COALESCE(image_url, $1) WHERE id = $2`,
+              [withImage.image_url, fragrance.id]
+            );
+          }
         }
       } catch (err) {
         console.log(`  [${retailerKey}] ERROR: ${(err as Error).message}`);

@@ -9,6 +9,13 @@ CREATE TABLE IF NOT EXISTS fragrances (
   gender       TEXT CHECK (gender IN ('male', 'female', 'unisex', 'unknown')) DEFAULT 'unknown',
   fragrance_type TEXT,                  -- EDT, EDP, EDC, Parfum, etc.
   image_url    TEXT,
+  -- Fragrantica community season vote scores (relative size is what matters)
+  season_spring SMALLINT,
+  season_summer SMALLINT,
+  season_fall   SMALLINT,
+  season_winter SMALLINT,
+  accords      TEXT[],
+  year         SMALLINT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (name, brand)
 );

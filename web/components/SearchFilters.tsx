@@ -31,6 +31,14 @@ const SIZES = [
   { value: 'large', label: '125 ml+' },
 ];
 
+const SEASONS = [
+  { value: '', label: 'All Seasons' },
+  { value: 'spring', label: 'Spring' },
+  { value: 'summer', label: 'Summer' },
+  { value: 'fall', label: 'Fall' },
+  { value: 'winter', label: 'Winter' },
+];
+
 /** A styled <select> that looks like a rounded chip and navigates on change. */
 function FilterSelect({
   value,
@@ -77,6 +85,7 @@ export function SearchFilters({ stores }: SearchFiltersProps) {
   const gender = params.get('gender') ?? '';
   const store = params.get('store') ?? '';
   const size = params.get('size') ?? '';
+  const season = params.get('season') ?? '';
   const inStock = params.get('inStock') === 'true';
 
   function setParam(key: string, value: string) {
@@ -97,6 +106,7 @@ export function SearchFilters({ stores }: SearchFiltersProps) {
       <FilterSelect value={gender} options={GENDERS} onChange={(v) => setParam('gender', v)} active={!!gender} />
       <FilterSelect value={store} options={storeOptions} onChange={(v) => setParam('store', v)} active={!!store} />
       <FilterSelect value={size} options={SIZES} onChange={(v) => setParam('size', v)} active={!!size} />
+      <FilterSelect value={season} options={SEASONS} onChange={(v) => setParam('season', v)} active={!!season} />
 
       <button
         onClick={() => setParam('inStock', inStock ? '' : 'true')}

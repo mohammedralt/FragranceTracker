@@ -14,6 +14,7 @@ interface SearchPageProps {
     gender?: string;
     store?: string;
     size?: string;
+    season?: string;
   };
 }
 
@@ -44,6 +45,19 @@ interface Filters {
   gender: string;
   store: string;
   size: string;
+  season: string;
+}
+
+/** True if `season` is among the fragrance's dominant seasons (within 80% of its top score). */
+function seasonMatches(f: { season_spring: number | null; season_summer: number | null; season_fall: number | null; season_winter: number | null }, season: string): boolean {
+  const scores: Record<string, number | null> = {
+    spring: f.season_spring, summer: f.season_summer, fall: f.season_fall, winter: f.season_winter,
+  };
+  const vals = Object.values(scores).filter((v): v is number => v != null);
+  if (vals.length === 0) return false; // no season data → excluded when filtering by season
+  const max = Math.max(...vals);
+  const target = scores[season];
+  return target != null && max > 0 && target >= max * 0.8;
 }
 
 async function Results({ filters }: { filters: Filters }) {
@@ -66,6 +80,9 @@ async function Results({ filters }: { filters: Filters }) {
 
   if (filters.gender) {
     fragrances = fragrances.filter((f) => f.gender === filters.gender);
+  }
+  if (filters.season) {
+    fragrances = fragrances.filter((f) => seasonMatches(f, filters.season));
   }
 
   const withData = await Promise.all(
@@ -148,6 +165,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     gender: searchParams.gender ?? '',
     store: searchParams.store ?? '',
     size: searchParams.size ?? '',
+    season: searchParams.season ?? '',
   };
 
   let stores: { key: string; name: string }[] = [];

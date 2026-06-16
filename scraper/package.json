@@ -10,12 +10,14 @@
     "worker": "ts-node src/queue/worker.ts",
     "scheduler": "ts-node src/queue/scheduler.ts",
     "install:browsers": "playwright install chromium",
-    "populate": "ts-node src/populate-prices.ts"
+    "populate": "ts-node src/populate-prices.ts",
+    "import": "ts-node src/import-fragrances.ts"
   },
   "dependencies": {
     "axios": "^1.7.2",
     "bullmq": "^5.7.0",
     "cheerio": "^1.0.0-rc.12",
+    "csv-parse": "^7.0.0",
     "dotenv": "^16.4.5",
     "ioredis": "^5.4.1",
     "pg": "^8.11.5",

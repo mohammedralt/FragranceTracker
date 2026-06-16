@@ -7,6 +7,12 @@ export interface Fragrance {
   gender: 'male' | 'female' | 'unisex' | 'unknown';
   fragrance_type: string | null;
   image_url: string | null;
+  season_spring: number | null;
+  season_summer: number | null;
+  season_fall: number | null;
+  season_winter: number | null;
+  accords: string[] | null;
+  year: number | null;
   created_at: string;
 }
 
